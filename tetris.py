@@ -17,7 +17,8 @@ AI_ENABLED = False     # never let a local AI run; server_wrapper overrides
 # ─────────────────────────────────────────────────────────────────────────────
 # Colors
 # ─────────────────────────────────────────────────────────────────────────────
-BLACK     = (10, 10, 10)
+BLACK     = (8, 8, 20)
+BG_LINE   = (12, 12, 28)
 WHITE     = (240, 240, 240)
 DARK_GREY = (40, 40, 40)
 GREY      = (90, 90, 90)
@@ -323,28 +324,38 @@ class Tetris:
         s = self.base_surface
         s.fill(BLACK)
 
+        # Subtle scan lines on board
+        for y in range(0, ROWS * CELL, 4):
+            pygame.draw.line(s, BG_LINE, (0, y), (COLS * CELL, y))
+
         # Board background grid
         for r in range(ROWS):
             for c in range(COLS):
-                pygame.draw.rect(s, DARK_GREY, (c*CELL+1, r*CELL+1, CELL-2, CELL-2), border_radius=2)
+                rect = (c * CELL + 1, r * CELL + 1, CELL - 2, CELL - 2)
+                pygame.draw.rect(s, DARK_GREY, rect, border_radius=2)
+                # Subtle inner highlight
+                pygame.draw.rect(s, (45, 45, 45), (rect[0], rect[1], rect[2], 1))
 
         # Locked pieces on board
         for r in range(ROWS):
             for c in range(COLS):
                 idx = self.board[r][c]
                 if idx:
-                    self._draw_cell(s, c, r, PIECE_COLORS[PIECE_TYPES[idx-1]])
+                    self._draw_cell(s, c, r, PIECE_COLORS[PIECE_TYPES[idx - 1]])
 
         # Current piece + ghost
         if self.state == "PLAY":
             # Ghost
             gy = self.piece['y']
-            while self._valid(self._cells(py=gy+1)):
+            while self._valid(self._cells(py=gy + 1)):
                 gy += 1
             for cx, cy in self._cells(py=gy):
                 if cy >= 0:
-                    pygame.draw.rect(s, GREY,
-                        (cx*CELL+1, cy*CELL+1, CELL-2, CELL-2), 2, border_radius=2)
+                    ghost_surf = pygame.Surface((CELL - 2, CELL - 2), pygame.SRCALPHA)
+                    color = PIECE_COLORS[self.piece['type']]
+                    pygame.draw.rect(ghost_surf, (*color, 40), (0, 0, CELL - 2, CELL - 2), border_radius=2)
+                    pygame.draw.rect(ghost_surf, (*color, 80), (0, 0, CELL - 2, CELL - 2), 2, border_radius=2)
+                    s.blit(ghost_surf, (cx * CELL + 1, cy * CELL + 1))
             # Actual piece
             color = PIECE_COLORS[self.piece['type']]
             for cx, cy in self._cells():
@@ -353,26 +364,39 @@ class Tetris:
 
         # Sidebar
         sx = COLS * CELL + 10
+        sidebar_x = COLS * CELL
+
+        # Sidebar background
+        pygame.draw.rect(s, (15, 15, 30), (sidebar_x, 0, 180, self.base_h))
+        pygame.draw.line(s, (40, 40, 60), (sidebar_x, 0), (sidebar_x, self.base_h), 1)
+
         def txt(text, y, color=WHITE):
             t = self.font.render(text, True, color)
             s.blit(t, (sx, y))
 
-        txt("SCORE",  10,  GREY)
+        def separator(y):
+            pygame.draw.line(s, (40, 40, 60), (sx, y), (sx + 160, y), 1)
+
+        txt("SCORE", 10, (100, 100, 140))
         txt(str(self.score), 32)
-        txt("BEST",   70,  GREY)
-        txt(str(self.hiscore), 92)
-        txt("TIME", 130,  GREY)
-        txt(f"{int(self.play_time)}s", 152)
-        txt("LIVES", 190,  GREY)
-        txt(str(self.lives), 212)
-        txt("NEXT",  260,  GREY)
+        separator(58)
+        txt("BEST", 65, (100, 100, 140))
+        txt(str(self.hiscore), 87)
+        separator(113)
+        txt("TIME", 120, (100, 100, 140))
+        txt(f"{int(self.play_time)}s", 142)
+        separator(168)
+        txt("LIVES", 175, (100, 100, 140))
+        txt(str(self.lives), 197)
+        separator(223)
+        txt("NEXT", 235, (100, 100, 140))
 
         # Next piece preview
         if self.state in ("PLAY", "PAUSE"):
             nc = PIECE_COLORS[self.next_t]
             cells = piece_cells(self.next_t, 0, 0, 0)
             for dx, dy in cells:
-                self._draw_cell(s, dx, dy, nc, ox=sx, oy=290, size=22)
+                self._draw_cell(s, dx, dy, nc, ox=sx, oy=265, size=22)
 
         # Overlay
         if self.state == "TITLE":
@@ -384,7 +408,7 @@ class Tetris:
 
         # Scale to window
         ww, wh = self.screen.get_size()
-        scale  = min(ww / self.base_w, wh / self.base_h)
+        scale = min(ww / self.base_w, wh / self.base_h)
         sw, sh = int(self.base_w * scale), int(self.base_h * scale)
         scaled = pygame.transform.smoothscale(s, (sw, sh))
         self.screen.fill(BLACK)
@@ -393,13 +417,13 @@ class Tetris:
 
     def _overlay(self, title, sub=None):
         ov = pygame.Surface((self.base_w, self.base_h), pygame.SRCALPHA)
-        ov.fill((0, 0, 0, 180))
+        ov.fill((0, 0, 20, 190))
         self.base_surface.blit(ov, (0, 0))
         t = self.big.render(title, True, WHITE)
         cx = (self.base_w - t.get_width()) // 2
         self.base_surface.blit(t, (cx, self.base_h // 2 - 60))
         if sub:
-            st = self.font.render(sub, True, GREY)
+            st = self.font.render(sub, True, (160, 160, 180))
             self.base_surface.blit(st, ((self.base_w - st.get_width()) // 2, self.base_h // 2))
 
     # ── Event handling ─────────────────────────────────────────────────────
